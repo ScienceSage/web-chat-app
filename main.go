@@ -7,6 +7,8 @@ import (
     "path/filepath"
     "sync"
     "flag"
+    "os"
+    "trace"
 )
 
 // templ represents a single template
@@ -27,6 +29,7 @@ func main() {
     var addr = flag.String("addr", ":8080", "The addr of the application")
     flag.Parse() // parse the flags
     r := newRoom();
+    r.tracer = trace.New(os.Stdout)
     // root
 	http.Handle("/", &templateHandler{filename: "chat.html"})
     http.Handle("/room", r)
