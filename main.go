@@ -9,6 +9,12 @@ import (
     "flag"
     "os"
     "trace"
+    
+    "github.com/stretchr/gomniauth"
+    "github.com/stretchr/gomniauth/providers/facebook"
+    "github.com/stretchr/gomniauth/providers/github"
+    "github.com/stretchr/gomniauth/providers/google"
+    "github.com/stretchr/objx"
 )
 
 // templ represents a single template
@@ -22,16 +28,39 @@ func (t *templateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     t.once.Do(func() {
         t.templ = template.Must(template.ParseFiles(filepath.Join("templates", t.filename)))
     })
-    t.templ.Execute(w, r)
+    
+    data := map[string]interface{}{
+        "Host": r.Host,
+    }
+    if authCookie, err := r.Cookie("auth"); err == nil {
+        // fmt.Println(objx.MustFromBase64(authCookie.Value));
+        data["UserData"] = objx.MustFromBase64(authCookie.Value)
+    }
+    
+    t.templ.Execute(w, data)
 } 
 
+var addr = flag.String("host", ":8080", "The host of the application")
+
 func main() {
-    var addr = flag.String("addr", ":8080", "The addr of the application")
     flag.Parse() // parse the flags
+    
+    // setup gomniauth
+    gomniauth.SetSecurityKey("milkisgoodwhennotcurded")
+    gomniauth.WithProviders(
+        facebook.New("key", "secret", "http://localhost:8080/auth/callback/facebook"),
+        github.New("key", "secret", "http://localhost:8080/auth/callback/github"),
+        google.New("892920471098-83at5o0oq1pmhnamgi0qoj7khhqq4k4r.apps.googleusercontent.com",
+            "dD8OYGAOs8pCyRhsn70HoHSm", "http://localhost:8080/auth/callback/google"),
+    )
+    
     r := newRoom();
     r.tracer = trace.New(os.Stdout)
     // root
-	http.Handle("/", &templateHandler{filename: "chat.html"})
+	//http.Handle("/", &templateHandler{filename: "chat.html"})
+    http.Handle("/chat", MustAuth(&templateHandler{filename: "chat.html"}))
+    http.Handle("/login", &templateHandler{filename: "login.html"})
+    http.HandleFunc("/auth/", loginHandler)
     http.Handle("/room", r)
     // get the room going
     go r.run()
